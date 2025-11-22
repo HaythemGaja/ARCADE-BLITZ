@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- PWA & Mobile Meta Tags -->
+    <title>Arcade Blitz Checkers</title>
+    <meta name="description" content="Fast-paced arcade checkers with power-ups and local AI.">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Arcade Blitz">
+    
+    <!-- PWA Manifest (Data URI for Single-File Compliance) -->
+    <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiQXJjYWRlIEJsaXR6IENoZWNrZXJzIiwic2hvcnRfbmFtZSI6IkFyY2FkZUJsaXR6Iiwic3RhcnRfdXJsIjoiLiIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMwZjE3MmEiLCJ0aGVtZV9jb2xvciI6IiMzYjgyZjYiLCJvcmllbnRhdGlvbiI6InBvcnRyYWl0IiwiaWNvbnMiOlt7InNyYyI6Imh0dHBzOi8vY2RuLWRhdGEuZ2VtaW5pLmdvb2dsZXVzZXJjb250ZW50LmNvbS9pbWFnZS1nZW5lcmF0ZWQtaWNvbi5wbmciLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2UvcG5nIn0seyJzcmMiOiJodHRwczovL2Nkbi1pY29ucy1wbmcuZmxhdGljb24uY29tLzUxMi84MDgvODA4NDM5LnBuZyIsInNpemVzIjoiNTEyeDUxMiIsInR5cGUiOiJpbWFnZS9wbmciLCJwdXJwb3NlIjoiYW55IG1hc2thYmxlIn1dfQ==">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/808/808439.png">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Exo+2:wght@300;600;800&display=swap');
+
+        :root {
+            --p1-color: #3b82f6; /* Blue */
+            --p2-color: #ef4444; /* Red */
+            --glass-bg: rgba(30, 41, 59, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Exo 2', sans-serif;
+            background: radial-gradient(circle at center, #1e1b4b 0%, #0f172a 100%);
+            color: #e2e8f0;
+            overflow: hidden;
+            touch-action: manipulation; /* Improves tap response */
+            -webkit-user-select: none; /* Safari */
+            -ms-user-select: none; /* IE 10 and IE 11 */
+            user-select: none; /* Standard syntax */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .font-arcade { font-family: 'Orbitron', sans-serif; }
+
+        /* Glassmorphism Panels */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Board & Pieces */
+        #board {
+            touch-action: none; /* Prevents scrolling when dragging/tapping board */
+        }
+
+        .cell { transition: background-color 0.2s; }
+        
+        .piece {
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            z-index: 10;
+        }
+        .piece:active { transform: scale(0.9); }
+        .piece.is-selected { 
+            box-shadow: 0 0 0 4px #fbbf24; 
+            transform: scale(1.1);
+            z-index: 20;
+        }
+
+        /* Move History Trails */
+        .last-move-from {
+            background-color: rgba(234, 179, 8, 0.2) !important; /* Faint Yellow */
+            box-shadow: inset 0 0 10px rgba(234, 179, 8, 0.1);
+        }
+        
+        .last-move-to {
+            background-color: rgba(234, 179, 8, 0.4) !important; /* Stronger Yellow */
+            box-shadow: inset 0 0 15px rgba(234, 179, 8, 0.3);
+        }
+
+        /* Move Indicators */
+        .highlight-move::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background-color: #4ade80;
+            border-radius: 50%;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse-green 1.5s infinite;
+        }
+        
+        .highlight-hint {
+            background-color: rgba(253, 224, 71, 0.4) !important;
+            box-shadow: inset 0 0 20px #facc15;
+            animation: pulse-yellow 1s infinite;
+            z-index: 5;
+        }
+
+        .highlight-capture {
+            background-color: rgba(239, 68, 68, 0.3) !important;
+            box-shadow: inset 0 0 15px #ef4444;
+        }
+
+        /* Animations */
+        @keyframes pulse-green {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.4; }
+            100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.8; }
+        }
+        @keyframes pulse-yellow {
+            0% { opacity: 0.3; box-shadow: inset 0 0 10px #facc15; }
+            50% { opacity: 0.7; box-shadow: inset 0 0 25px #facc15; }
+            100% { opacity: 0.3; box-shadow: inset 0 0 10px #facc15; }
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+
+        .floating-score {
+            position: absolute;
+            font-weight: 800;
+            font-size: 1.5rem;
+            pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+            z-index: 50;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* Utility classes for hiding scrollbars */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* AI Thinking Overlay */
+        .thinking-overlay {
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(2px);
+        }
+
+        /* Landscape Mobile Adjustments */
+        @media (max-height: 500px) {
+            #main-menu h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+            #main-menu .glass-panel { padding: 1rem; max-width: 400px; }
+            #hud-p1, #hud-p2 { width: auto; padding: 0.5rem; }
+            #timer-display { font-size: 1.5rem; }
+            #turn-badge { font-size: 0.6rem; padding: 0.2rem 0.5rem; }
+        }
+    </style>
+</head>
+<body class="h-[100dvh] w-screen flex flex-col items-center justify-center relative">
+
+    <!-- ================= MAIN MENU ================= -->
+    <div id="main-menu" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/95 backdrop-blur-xl transition-opacity duration-500">
+        <div class="text-center mb-8 md:mb-12">
+            <h1 class="font-arcade text-4xl md:text-7xl text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-4 drop-shadow-lg">
+                ARCADE BLITZ
+            </h1>
+            <p class="text-slate-400 text-sm md:text-lg tracking-widest uppercase">Campaign Edition</p>
+        </div>
+
+        <div class="glass-panel p-6 md:p-8 rounded-2xl w-[90%] max-w-md space-y-4 md:space-y-6 max-h-[80vh] overflow-y-auto no-scrollbar">
+            <!-- Mode Selection -->
+            <div class="space-y-2">
+                <label class="text-xs uppercase font-bold text-slate-400 tracking-wider">Game Mode</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="selectMode('pvp')" id="btn-pvp" class="mode-btn p-4 rounded-xl border border-slate-600 hover:border-blue-500 hover:bg-slate-700 transition-all text-center group active-mode">
+                        <i class="fas fa-user-friends text-2xl mb-2 text-slate-300 group-hover:text-blue-400"></i>
+                        <div class="font-bold text-sm md:text-base">PvP Custom</div>
+                    </button>
+                    <button onclick="selectMode('ai')" id="btn-ai" class="mode-btn p-4 rounded-xl border border-slate-600 hover:border-purple-500 hover:bg-slate-700 transition-all text-center group">
+                        <i class="fas fa-robot text-2xl mb-2 text-slate-300 group-hover:text-purple-400"></i>
+                        <div class="font-bold text-sm md:text-base">Campaign</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PvP Settings (Hidden for Campaign) -->
+            <div id="pvp-settings" class="space-y-4">
+                <div class="space-y-2">
+                    <label class="text-xs uppercase font-bold text-slate-400 tracking-wider">Grid Size</label>
+                    <div class="flex gap-2 bg-slate-800 p-1 rounded-lg">
+                        <button onclick="selectSize(6)" class="size-btn flex-1 py-2 rounded text-xs md:text-sm font-bold text-slate-400 hover:text-blue-400 transition-colors" data-val="6">6x6</button>
+                        <button onclick="selectSize(8)" class="size-btn flex-1 py-2 rounded text-xs md:text-sm font-bold text-slate-400 hover:text-blue-400 transition-colors bg-slate-700 text-white shadow" data-val="8">8x8</button>
+                        <button onclick="selectSize(10)" class="size-btn flex-1 py-2 rounded text-xs md:text-sm font-bold text-slate-400 hover:text-blue-400 transition-colors" data-val="10">10x10</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Campaign Status (Hidden for PvP) -->
+            <div id="campaign-status" class="hidden text-center space-y-2 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                <div class="text-xs uppercase font-bold text-purple-400 tracking-wider mb-1">Current Level</div>
+                <div id="campaign-level-title" class="font-arcade text-xl text-white">Level 1: Rookie Training</div>
+                <div class="flex justify-between text-xs text-slate-400 mt-2">
+                    <span id="campaign-grid-info">Grid: 6x6</span>
+                    <span id="campaign-diff-info">AI: Easy</span>
+                </div>
+            </div>
+
+            <div class="space-y-3 pt-2">
+                <button onclick="launchGame()" class="w-full py-3 md:py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-lg md:text-xl rounded-xl shadow-lg shadow-blue-900/50 transform transition hover:scale-[1.02] active:scale-95">
+                    START MATCH
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="showRules()" class="flex-1 py-2 md:py-3 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white font-bold rounded-xl border border-slate-600 hover:border-slate-400 transition-all text-sm md:text-base">
+                        HOW TO PLAY
+                    </button>
+                    <button id="pwa-install-btn" onclick="installPWA()" class="hidden flex-1 py-2 md:py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl border border-emerald-500 hover:border-emerald-400 transition-all text-sm md:text-base">
+                        <i class="fas fa-download mr-2"></i>INSTALL
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= READY OVERLAY ================= -->
+    <div id="ready-overlay" class="hidden absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+        <div class="glass-panel p-8 rounded-2xl text-center animate-[pulse_2s_infinite]">
+            <h2 class="font-arcade text-3xl md:text-4xl text-white mb-2">GET READY!</h2>
+            <p id="ready-msg" class="text-blue-400 font-bold text-xl md:text-2xl mb-8">YOU ARE BLUE</p>
+            <button onclick="beginMatch()" class="px-10 py-4 bg-green-500 hover:bg-green-400 text-white font-bold text-xl rounded-xl shadow-lg transform transition hover:scale-105 active:scale-95 border-2 border-green-300">
+                GO!
+            </button>
+        </div>
+    </div>
+
+    <!-- ================= RULES MODAL ================= -->
+    <div id="rules-modal" class="hidden absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-900/98 backdrop-blur-xl p-4">
+        <div class="w-full max-w-2xl h-full max-h-[90vh] overflow-y-auto no-scrollbar glass-panel rounded-2xl p-6 md:p-8 border border-slate-600">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="font-arcade text-2xl md:text-3xl text-blue-400">GAME RULES</h2>
+                <button onclick="hideRules()" class="text-slate-400 hover:text-white text-2xl"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div class="space-y-6 md:space-y-8">
+                <!-- Section 1: Objective -->
+                <div class="flex gap-4">
+                    <div class="bg-blue-900/30 p-3 md:p-4 rounded-xl h-min border border-blue-500/30 shrink-0">
+                        <i class="fas fa-flag-checkered text-xl md:text-2xl text-blue-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg md:text-xl text-white mb-1">Objective</h3>
+                        <p class="text-slate-400 text-sm">Eliminate all opponent pieces to win the level.</p>
+                    </div>
+                </div>
+
+                <!-- Section 2: Movement -->
+                <div class="flex gap-4">
+                    <div class="bg-purple-900/30 p-3 md:p-4 rounded-xl h-min border border-purple-500/30 shrink-0">
+                        <i class="fas fa-arrows-alt text-xl md:text-2xl text-purple-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg md:text-xl text-white mb-1">Movement</h3>
+                        <p class="text-slate-400 text-sm mb-2">Move 1 square in <strong class="text-white">ANY direction</strong> (Horizontal, Vertical, Diagonal).</p>
+                        <ul class="space-y-1 text-sm">
+                            <li class="flex items-center gap-2"><span class="text-green-400 font-bold">+10 Pts</span> Advance</li>
+                            <li class="flex items-center gap-2"><span class="text-red-400 font-bold">-10 Pts</span> Retreat</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Section 3: Combat -->
+                <div class="flex gap-4">
+                    <div class="bg-red-900/30 p-3 md:p-4 rounded-xl h-min border border-red-500/30 shrink-0">
+                        <i class="fas fa-skull text-xl md:text-2xl text-red-400"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg md:text-xl text-white mb-1">Combat & Combos</h3>
+                        <ul class="space-y-2 text-sm text-slate-400">
+                            <li><strong class="text-white">Capture:</strong> Jump over an enemy. <span class="text-yellow-400 font-bold">+50 Pts</span>.</li>
+                            <li><strong class="text-white">Chain Combo:</strong> Capturing grants an <span class="text-green-400 font-bold">EXTRA TURN</span>.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="hideRules()" class="w-full py-3 md:py-4 mt-8 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl">GOT IT</button>
+        </div>
+    </div>
+
+    <!-- ================= PAUSE MENU ================= -->
+    <div id="pause-menu" class="hidden absolute inset-0 z-40 flex flex-col items-center justify-center bg-slate-900/95 backdrop-blur-xl">
+        <div class="glass-panel p-8 rounded-2xl w-80 text-center space-y-4">
+            <h2 class="font-arcade text-3xl text-white mb-6">PAUSED</h2>
+            <button onclick="togglePause()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-lg font-bold">RESUME</button>
+            <button onclick="showRules()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold">RULES</button>
+            <button onclick="showMainMenu()" class="w-full py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-bold">EXIT TO MENU</button>
+        </div>
+    </div>
+
+    <!-- ================= GAME OVER SCREEN ================= -->
+    <div id="game-over-screen" class="hidden absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
+        <h1 id="go-title" class="font-arcade text-4xl md:text-5xl mb-4 text-white">GAME OVER</h1>
+        <div class="glass-panel p-8 rounded-2xl w-[90%] max-w-lg text-center">
+            <p id="go-message" class="text-2xl font-bold mb-8 text-blue-400">Player 1 Wins!</p>
+            
+            <div class="grid grid-cols-2 gap-8 mb-8 text-left">
+                <div>
+                    <div class="text-xs text-slate-400 uppercase">Blue Score</div>
+                    <div id="go-score-1" class="text-3xl font-arcade text-blue-400">0</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs text-slate-400 uppercase">Red Score</div>
+                    <div id="go-score-2" class="text-3xl font-arcade text-red-400">0</div>
+                </div>
+            </div>
+
+            <div id="go-actions" class="space-y-3">
+                <button id="btn-next-level" onclick="nextLevel()" class="hidden w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg animate-bounce">
+                    NEXT LEVEL <i class="fas fa-arrow-right ml-2"></i>
+                </button>
+                <button id="btn-retry" onclick="retryLevel()" class="hidden w-full py-3 bg-yellow-600 hover:bg-yellow-500 text-white font-bold rounded-xl">
+                    RETRY LEVEL <i class="fas fa-redo ml-2"></i>
+                </button>
+                <button onclick="showMainMenu()" class="w-full py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl">MAIN MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= FLOATING CONTROLS ================= -->
+    <button onclick="togglePause()" class="fixed bottom-6 left-6 md:bottom-8 md:left-8 z-40 w-14 h-14 md:w-16 md:h-16 bg-slate-800/80 backdrop-blur text-white rounded-full hover:bg-slate-700 border-2 border-slate-500 shadow-xl flex items-center justify-center transition-all active:scale-90 tap-target" title="Pause Game">
+        <i class="fas fa-pause text-xl md:text-2xl"></i>
+    </button>
+
+    <button onclick="requestHint()" id="btn-hint" class="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-40 w-16 h-16 md:w-20 md:h-20 bg-amber-500 hover:bg-amber-400 text-white rounded-full shadow-[0_0_25px_rgba(245,158,11,0.5)] flex items-center justify-center transition-all active:scale-90 border-4 border-amber-300 hover:shadow-[0_0_40px_rgba(245,158,11,0.8)] tap-target" title="Smart Hint">
+        <i class="fas fa-lightbulb text-3xl md:text-4xl"></i>
+        <div id="hint-loader" class="hidden absolute inset-0 rounded-full border-4 border-white border-t-transparent animate-spin"></div>
+    </button>
+
+    <!-- ================= GAME HUD ================= -->
+    <div class="absolute top-0 w-full max-w-6xl p-2 md:p-4 flex justify-between items-start z-10 pointer-events-none">
+        
+        <!-- P1 Card -->
+        <div id="hud-p1" class="glass-panel p-2 md:p-4 rounded-xl border-l-4 border-blue-500 w-28 md:w-64 transition-all duration-300 pointer-events-auto">
+            <div class="flex justify-between items-center mb-1 md:mb-2">
+                <span class="font-bold text-blue-400 text-xs md:text-base">BLUE</span>
+                <i class="fas fa-user text-blue-500/50"></i>
+            </div>
+            <div id="score-p1" class="font-arcade text-2xl md:text-3xl text-white">0</div>
+            <div class="text-[10px] md:text-xs text-slate-400 mt-1">Pieces: <span id="pieces-p1">12</span></div>
+        </div>
+
+        <!-- Timer Center -->
+        <div class="flex flex-col items-center mx-2 pointer-events-auto">
+            <div class="bg-slate-900/80 rounded-full px-4 py-1 md:px-6 md:py-2 mb-1 md:mb-2 border border-slate-700 backdrop-blur shadow-lg shadow-black/50">
+                <span id="timer-display" class="font-arcade text-2xl md:text-3xl text-emerald-400">15.0</span>
+            </div>
+            
+            <!-- Turn Badge -->
+            <div id="turn-badge" class="px-3 py-1 bg-blue-600 rounded-full text-[10px] md:text-xs font-bold tracking-widest shadow-lg shadow-blue-500/30 mb-2 transition-colors duration-300">
+                BLUE TURN
+            </div>
+            
+            <!-- Level Indicator -->
+            <div id="hud-level-display" class="text-[10px] md:text-xs font-bold text-purple-400 tracking-wider mt-1 hidden">
+                LEVEL 1
+            </div>
+        </div>
+
+        <!-- P2 Card -->
+        <div id="hud-p2" class="glass-panel p-2 md:p-4 rounded-xl border-r-4 border-red-500 w-28 md:w-64 text-right opacity-50 transition-all duration-300 pointer-events-auto">
+            <div class="flex justify-between items-center mb-1 md:mb-2 flex-row-reverse">
+                <span class="font-bold text-red-400 text-xs md:text-base" id="p2-name">RED</span>
+                <i class="fas fa-robot text-red-500/50" id="p2-icon"></i>
+            </div>
+            <div id="score-p2" class="font-arcade text-2xl md:text-3xl text-white">0</div>
+            <div class="text-[10px] md:text-xs text-slate-400 mt-1">Pieces: <span id="pieces-p2">12</span></div>
+        </div>
+    </div>
+
+    <!-- ================= GAME BOARD AREA ================= -->
+    <div id="game-container" class="relative mt-0 md:mt-0 flex items-center justify-center transition-opacity duration-500 opacity-0 h-full w-full">
+        
+        <div id="board" class="grid gap-0.5 bg-slate-800 p-2 rounded-lg shadow-2xl border-2 border-slate-700 relative" 
+             style="width: min(90vw, 60vh, 550px); aspect-ratio: 1/1;">
+            <!-- Generated Cells -->
+        </div>
+
+        <!-- AI Thinking Overlay -->
+        <div id="ai-thinking" class="hidden absolute inset-0 z-20 thinking-overlay rounded-lg flex flex-col items-center justify-center">
+            <div class="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <span class="font-arcade text-purple-400 text-lg animate-pulse">CPU THINKING...</span>
+        </div>
+
+    </div>
+
+    <!-- Move Log -->
+    <div class="hidden xl:block absolute left-8 bottom-28 w-64 glass-panel p-4 rounded-xl h-64 flex flex-col">
+        <h3 class="text-xs font-bold text-slate-400 uppercase mb-2 border-b border-slate-700 pb-2">Battle Log</h3>
+        <div id="battle-log" class="flex-1 overflow-y-auto no-scrollbar space-y-1.5 text-xs font-mono text-slate-300">
+            <!-- Logs -->
+        </div>
+    </div>
+
+    <script>
+        // --- CAMPAIGN LEVELS CONFIGURATION ---
+        const LEVELS = [
+            { size: 6, diff: 'easy', timer: 20, name: "Rookie Training" },
+            { size: 6, diff: 'medium', timer: 15, name: "Arcade Skirmish" },
+            { size: 8, diff: 'easy', timer: 20, name: "Standard Drill" },
+            { size: 8, diff: 'medium', timer: 15, name: "Veteran Battle" },
+            { size: 8, diff: 'hard', timer: 15, name: "Elite Challenge" },
+            { size: 10, diff: 'medium', timer: 20, name: "Grand Battlefield" },
+            { size: 10, diff: 'hard', timer: 15, name: "General's Duel" },
+            { size: 8, diff: 'hard', timer: 10, name: "BLITZ NIGHTMARE" }
+        ];
+
+        // --- CONSTANTS & CONFIG ---
+        let BOARD_SIZE = 8; // Mutable based on level
+        let TIME_LIMIT = 15.0; // Mutable based on level
+        const P1 = 1; // Blue (Player)
+        const P2 = 2; // Red (Opponent/AI)
+
+        // --- PWA INSTALLATION LOGIC ---
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const btn = document.getElementById('pwa-install-btn');
+            if(btn) btn.classList.remove('hidden');
+        });
+
+        async function installPWA() {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            deferredPrompt = null;
+            document.getElementById('pwa-install-btn').classList.add('hidden');
+        }
+
+        // --- STATE VARIABLES ---
+        let gameState = {
+            board: [],
+            turn: P1,
+            mode: 'pvp', // 'pvp' or 'ai'
+            difficulty: 'medium', 
+            campaignLevel: 0, // 0 to 7
+            scores: { 1: 0, 2: 0 },
+            pieces: { 1: 12, 2: 12 },
+            selected: null, 
+            validMoves: [],
+            timer: TIME_LIMIT,
+            timerInterval: null,
+            isPlaying: false,
+            isPaused: false,
+            extraTurn: false, 
+            lastMove: null
+        };
+
+        // --- SOUND ENGINE ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const playTone = (freq, type, duration) => {
+            if(audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        };
+
+        const sfx = {
+            move: () => playTone(300, 'sine', 0.1),
+            capture: () => playTone(600, 'triangle', 0.2),
+            error: () => playTone(150, 'sawtooth', 0.2),
+            win: () => { [400, 500, 600, 800].forEach((f, i) => setTimeout(() => playTone(f, 'square', 0.2), i * 100)); },
+            loss: () => { [300, 200, 100].forEach((f, i) => setTimeout(() => playTone(f, 'sawtooth', 0.3), i * 200)); }
+        };
+
+        // --- INITIALIZATION & MENU LOGIC ---
+
+        // Load saved progress on start
+        window.onload = function() {
+            const savedLevel = localStorage.getItem('arcadeBlitzLevel');
+            if (savedLevel) {
+                gameState.campaignLevel = Math.min(parseInt(savedLevel), LEVELS.length - 1);
+            }
+            updateCampaignMenu();
+        };
+
+        function selectMode(mode) {
+            gameState.mode = mode;
+            const pvpBtn = document.getElementById('btn-pvp');
+            const aiBtn = document.getElementById('btn-ai');
+            const pvpSettings = document.getElementById('pvp-settings');
+            const campStatus = document.getElementById('campaign-status');
+            
+            if (mode === 'pvp') {
+                pvpBtn.className = "mode-btn p-4 rounded-xl border-2 border-blue-500 bg-slate-700 text-center group shadow-lg shadow-blue-900/20 active-mode";
+                aiBtn.className = "mode-btn p-4 rounded-xl border border-slate-600 hover:border-purple-500 hover:bg-slate-700 transition-all text-center group";
+                pvpSettings.classList.remove('hidden');
+                campStatus.classList.add('hidden');
+            } else {
+                aiBtn.className = "mode-btn p-4 rounded-xl border-2 border-purple-500 bg-slate-700 text-center group shadow-lg shadow-purple-900/20 active-mode";
+                pvpBtn.className = "mode-btn p-4 rounded-xl border border-slate-600 hover:border-blue-500 hover:bg-slate-700 transition-all text-center group";
+                pvpSettings.classList.add('hidden');
+                campStatus.classList.remove('hidden');
+                updateCampaignMenu();
+            }
+        }
+
+        function updateCampaignMenu() {
+            const levelData = LEVELS[gameState.campaignLevel];
+            document.getElementById('campaign-level-title').innerText = `Level ${gameState.campaignLevel + 1}: ${levelData.name}`;
+            document.getElementById('campaign-grid-info').innerText = `Grid: ${levelData.size}x${levelData.size}`;
+            document.getElementById('campaign-diff-info').innerText = `AI: ${levelData.diff.toUpperCase()}`;
+        }
+
+        function selectDiff(diff) {
+            if(gameState.mode === 'ai') return; // Ignored in campaign
+            gameState.difficulty = diff;
+            document.querySelectorAll('.diff-btn').forEach(btn => {
+                if (btn.dataset.val === diff) {
+                    btn.classList.add('bg-slate-700', 'text-white', 'shadow');
+                    btn.classList.remove('text-slate-400');
+                } else {
+                    btn.classList.remove('bg-slate-700', 'text-white', 'shadow');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+        }
+
+        function selectSize(size) {
+            if(gameState.mode === 'ai') return; // Ignored in campaign
+            BOARD_SIZE = size;
+            document.querySelectorAll('.size-btn').forEach(btn => {
+                if (parseInt(btn.dataset.val) === size) {
+                    btn.classList.add('bg-slate-700', 'text-white', 'shadow');
+                    btn.classList.remove('text-slate-400');
+                } else {
+                    btn.classList.remove('bg-slate-700', 'text-white', 'shadow');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+        }
+
+        function launchGame() {
+            document.getElementById('main-menu').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('game-container').classList.remove('opacity-0');
+            
+            // Apply settings based on mode
+            if (gameState.mode === 'ai') {
+                const levelData = LEVELS[gameState.campaignLevel];
+                BOARD_SIZE = levelData.size;
+                TIME_LIMIT = levelData.timer;
+                gameState.difficulty = levelData.diff;
+                document.getElementById('hud-level-display').classList.remove('hidden');
+                document.getElementById('hud-level-display').innerText = `LVL ${gameState.campaignLevel+1}: ${levelData.name.toUpperCase()}`;
+            } else {
+                TIME_LIMIT = 15.0; // Default for PvP
+                document.getElementById('hud-level-display').classList.add('hidden');
+            }
+
+            gameState.isPlaying = true;
+            gameState.isPaused = false; 
+            
+            initBoard();
+            renderBoard();
+            
+            const readyMsg = document.getElementById('ready-msg');
+            if (gameState.mode === 'ai') {
+                readyMsg.innerText = `LEVEL ${gameState.campaignLevel+1} - YOU ARE BLUE`;
+            } else {
+                readyMsg.innerText = "BLUE STARTS (BOTTOM)";
+            }
+            
+            document.getElementById('ready-overlay').classList.remove('hidden');
+        }
+        
+        function beginMatch() {
+            document.getElementById('ready-overlay').classList.add('hidden');
+            startTurn();
+        }
+
+        function showMainMenu() {
+            stopTimer();
+            gameState.isPlaying = false;
+            gameState.isPaused = false;
+            document.getElementById('main-menu').classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('game-container').classList.add('opacity-0');
+            document.getElementById('pause-menu').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('ai-thinking').classList.add('hidden');
+            document.getElementById('ready-overlay').classList.add('hidden');
+            hideRules();
+        }
+
+        function nextLevel() {
+            if (gameState.campaignLevel < LEVELS.length - 1) {
+                gameState.campaignLevel++;
+                localStorage.setItem('arcadeBlitzLevel', gameState.campaignLevel);
+                document.getElementById('game-over-screen').classList.add('hidden');
+                launchGame();
+            } else {
+                // Campaign Complete - Reset or Loop?
+                gameState.campaignLevel = 0; 
+                localStorage.setItem('arcadeBlitzLevel', 0);
+                alert("CONGRATULATIONS! YOU BEAT THE CAMPAIGN!");
+                showMainMenu();
+            }
+        }
+
+        function retryLevel() {
+            document.getElementById('game-over-screen').classList.add('hidden');
+            launchGame();
+        }
+
+        function togglePause() {
+            if (!gameState.isPlaying) return;
+            if (!document.getElementById('ready-overlay').classList.contains('hidden')) return;
+            
+            gameState.isPaused = !gameState.isPaused;
+            const pauseMenu = document.getElementById('pause-menu');
+            
+            if (gameState.isPaused) {
+                stopTimer();
+                pauseMenu.classList.remove('hidden');
+            } else {
+                startTimer();
+                pauseMenu.classList.add('hidden');
+            }
+        }
+        
+        function showRules() { document.getElementById('rules-modal').classList.remove('hidden'); }
+        function hideRules() { document.getElementById('rules-modal').classList.add('hidden'); }
+
+        // --- GAME LOGIC ---
+
+        function initBoard() {
+            gameState.board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
+            const rowsPerSide = (BOARD_SIZE - 2) / 2;
+            let p1Count = 0;
+            let p2Count = 0;
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if ((r + c) % 2 === 1) {
+                        if (r < rowsPerSide) {
+                            gameState.board[r][c] = P2;
+                            p2Count++;
+                        }
+                        else if (r >= BOARD_SIZE - rowsPerSide) {
+                            gameState.board[r][c] = P1;
+                            p1Count++;
+                        }
+                    }
+                }
+            }
+
+            gameState.scores = { 1: 0, 2: 0 };
+            gameState.pieces = { 1: p1Count, 2: p2Count };
+            gameState.turn = P1;
+            gameState.extraTurn = false;
+            gameState.lastMove = null;
+            updateHUD();
+            log(`Match Initialized (${BOARD_SIZE}x${BOARD_SIZE})`);
+        }
+
+        function getValidMoves(board, player) {
+            let moves = [];
+            const directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    if (board[r][c] === player) {
+                        directions.forEach(([dr, dc]) => {
+                            let nr = r + dr, nc = c + dc;
+                            if (isInBounds(nr, nc) && board[nr][nc] === 0) {
+                                moves.push({ from: {r,c}, to: {r: nr, c: nc}, type: 'move' });
+                            }
+                            
+                            let jr = r + (dr * 2), jc = c + (dc * 2);
+                            let mr = r + dr, mc = c + dc; 
+                            if (isInBounds(jr, jc) && isInBounds(mr, mc)) {
+                                let midPiece = board[mr][mc];
+                                if (midPiece !== 0 && midPiece !== player && board[jr][jc] === 0) {
+                                    moves.push({ from: {r,c}, to: {r: jr, c: jc}, type: 'capture', mid: {r: mr, c: mc} });
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+            return moves;
+        }
+
+        function isInBounds(r, c) { return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE; }
+
+        function handleCellClick(r, c) {
+            if (gameState.isPaused || !gameState.isPlaying) return;
+            if (!document.getElementById('ready-overlay').classList.contains('hidden')) return;
+            if (gameState.mode === 'ai' && gameState.turn === P2) return;
+
+            const clickedPiece = gameState.board[r][c];
+            
+            if (clickedPiece === gameState.turn) {
+                gameState.selected = {r, c};
+                const allMoves = getValidMoves(gameState.board, gameState.turn);
+                gameState.validMoves = allMoves.filter(m => m.from.r === r && m.from.c === c);
+                renderBoard();
+                return;
+            }
+
+            if (gameState.selected && clickedPiece === 0) {
+                const move = gameState.validMoves.find(m => m.to.r === r && m.to.c === c);
+                if (move) {
+                    executeMove(move);
+                } else {
+                    gameState.selected = null;
+                    gameState.validMoves = [];
+                    renderBoard();
+                }
+            }
+        }
+
+        function executeMove(move, isSimulation = false) {
+            const { from, to, type } = move;
+            const player = isSimulation ? (gameState.board[from.r][from.c]) : gameState.turn;
+            
+            gameState.board[to.r][to.c] = player;
+            gameState.board[from.r][from.c] = 0;
+            
+            if (!isSimulation) gameState.lastMove = { from: {...from}, to: {...to} };
+            
+            let scoreChange = 0;
+            let logMsg = "";
+            let hasCaptured = false;
+
+            if (type === 'capture') {
+                const { mid } = move;
+                gameState.board[mid.r][mid.c] = 0; 
+                const opponent = player === P1 ? P2 : P1;
+                gameState.pieces[opponent]--;
+                scoreChange += 50;
+                logMsg = "Captured! (+50)";
+                hasCaptured = true;
+                if(!isSimulation) { sfx.capture(); gameState.extraTurn = true; }
+            } else {
+                if(!isSimulation) { sfx.move(); gameState.extraTurn = false; }
+                const dr = to.r - from.r;
+                const isForward = (player === P1 && dr < 0) || (player === P2 && dr > 0);
+                const isBackward = (player === P1 && dr > 0) || (player === P2 && dr < 0);
+                if (isForward) { scoreChange += 10; logMsg = "Advance (+10)"; }
+                if (isBackward) { scoreChange -= 10; logMsg = "Retreat (-10)"; }
+            }
+
+            if (!isSimulation) {
+                if (gameState.timer > 5) scoreChange += Math.floor(gameState.timer);
+                gameState.scores[player] += scoreChange;
+                showFloatingText(to.r, to.c, scoreChange > 0 ? `+${scoreChange}` : `${scoreChange}`);
+                
+                if (gameState.pieces[1] === 0 || gameState.pieces[2] === 0) {
+                    endGame();
+                    return;
+                }
+
+                if (gameState.extraTurn) {
+                    log(`${player===1?'Blue':'Red'} ${logMsg} (COMBO!)`);
+                    resetTimer(); 
+                    if (gameState.mode === 'ai' && gameState.turn === P2) setTimeout(triggerAITurn, 800);
+                } else {
+                    log(`${player===1?'Blue':'Red'} ${logMsg}`);
+                    gameState.turn = gameState.turn === P1 ? P2 : P1;
+                    gameState.selected = null;
+                    gameState.validMoves = [];
+                    renderBoard();
+                    updateHUD();
+                    startTurn();
+                }
+                renderBoard();
+                updateHUD();
+            }
+            return hasCaptured;
+        }
+
+        // --- TIMER & SCORING ---
+
+        function startTurn() {
+            resetTimer();
+            updateHUD();
+            if (gameState.mode === 'ai' && gameState.turn === P2) triggerAITurn();
+        }
+
+        function resetTimer() {
+            stopTimer();
+            gameState.timer = TIME_LIMIT;
+            updateTimerVisuals();
+            startTimer();
+        }
+
+        function startTimer() {
+            gameState.timerInterval = setInterval(() => {
+                if (gameState.isPaused) return;
+                if (!document.getElementById('ready-overlay').classList.contains('hidden')) return;
+
+                gameState.timer -= 0.1;
+                if (gameState.timer < 0) gameState.timer = 0;
+                updateTimerVisuals();
+
+                if (gameState.timer < 5 && gameState.timer > 0) {
+                    if (Math.floor(gameState.timer * 10) % 10 === 0) { 
+                        gameState.scores[gameState.turn] -= 5; 
+                        updateHUD();
+                        document.getElementById('timer-display').classList.add('text-red-500');
+                    }
+                }
+
+                if (gameState.timer <= 0) handleTimeout();
+            }, 100);
+        }
+
+        function stopTimer() { clearInterval(gameState.timerInterval); }
+
+        function updateTimerVisuals() {
+            const el = document.getElementById('timer-display');
+            el.innerText = gameState.timer.toFixed(1);
+            if (gameState.timer > 5) el.className = "font-arcade text-2xl md:text-3xl text-emerald-400";
+            else el.className = "font-arcade text-2xl md:text-3xl text-red-500 animate-pulse";
+        }
+
+        function handleTimeout() {
+            stopTimer();
+            sfx.error();
+            log("Time's Up! Turn Skipped.");
+            gameState.turn = gameState.turn === P1 ? P2 : P1;
+            gameState.extraTurn = false;
+            gameState.selected = null;
+            gameState.validMoves = [];
+            gameState.lastMove = null;
+            renderBoard();
+            updateHUD();
+            startTurn();
+        }
+
+        // --- LOCAL AI LOGIC (MINIMAX) ---
+
+        function evaluateBoardState(board, player) {
+            let score = 0;
+            const opponent = player === 1 ? 2 : 1;
+            const centerStart = Math.floor(BOARD_SIZE * 0.25);
+            const centerEnd = Math.floor(BOARD_SIZE * 0.75);
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const piece = board[r][c];
+                    if (piece === player) {
+                        score += 100; 
+                        if (r >= centerStart && r <= centerEnd && c >= centerStart && c <= centerEnd) score += 5;
+                        if (player === P1) score += (BOARD_SIZE - 1 - r) * 2; 
+                        else score += r * 2; 
+                    } else if (piece === opponent) {
+                        score -= 100;
+                        if (r >= centerStart && r <= centerEnd && c >= centerStart && c <= centerEnd) score -= 5;
+                        if (opponent === P1) score -= (BOARD_SIZE - 1 - r) * 2;
+                        else score -= r * 2;
+                    }
+                }
+            }
+            return score;
+        }
+
+        function cloneBoard(board) { return board.map(row => [...row]); }
+
+        function simulateMove(board, move) {
+            const newBoard = cloneBoard(board);
+            const { from, to, type } = move;
+            const player = newBoard[from.r][from.c];
+            newBoard[to.r][to.c] = player;
+            newBoard[from.r][from.c] = 0;
+            if (type === 'capture') newBoard[move.mid.r][move.mid.c] = 0;
+            return newBoard;
+        }
+
+        function minimax(board, depth, alpha, beta, isMaximizing, player) {
+            if (depth === 0) return evaluateBoardState(board, player);
+            const currentPlayer = isMaximizing ? player : (player === 1 ? 2 : 1);
+            const validMoves = getValidMoves(board, currentPlayer);
+            if (validMoves.length === 0) return isMaximizing ? -10000 : 10000;
+
+            if (isMaximizing) {
+                let maxEval = -Infinity;
+                for (const move of validMoves) {
+                    const newBoard = simulateMove(board, move);
+                    const eval = minimax(newBoard, depth - 1, alpha, beta, false, player);
+                    maxEval = Math.max(maxEval, eval);
+                    alpha = Math.max(alpha, eval);
+                    if (beta <= alpha) break;
+                }
+                return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (const move of validMoves) {
+                    const newBoard = simulateMove(board, move);
+                    const eval = minimax(newBoard, depth - 1, alpha, beta, true, player);
+                    minEval = Math.min(minEval, eval);
+                    beta = Math.min(beta, eval);
+                    if (beta <= alpha) break;
+                }
+                return minEval;
+            }
+        }
+
+        function getBestMove(board, player, depth = 2) {
+            const validMoves = getValidMoves(board, player);
+            if (validMoves.length === 0) return null;
+            validMoves.sort((a, b) => (b.type === 'capture' ? 1 : 0) - (a.type === 'capture' ? 1 : 0));
+
+            let bestMove = null;
+            let maxEval = -Infinity;
+            let alpha = -Infinity;
+            let beta = Infinity;
+
+            for (const move of validMoves) {
+                const newBoard = simulateMove(board, move);
+                const eval = minimax(newBoard, depth - 1, alpha, beta, false, player);
+                if (eval > maxEval) {
+                    maxEval = eval;
+                    bestMove = move;
+                }
+                alpha = Math.max(alpha, eval);
+            }
+            return bestMove || validMoves[0];
+        }
+
+        async function triggerAITurn() {
+            stopTimer();
+            document.getElementById('ai-thinking').classList.remove('hidden');
+            await new Promise(r => setTimeout(r, 800));
+
+            if (!gameState.isPlaying) return; 
+
+            const validMoves = getValidMoves(gameState.board, P2);
+            if (validMoves.length === 0) {
+                handleTimeout();
+                document.getElementById('ai-thinking').classList.add('hidden');
+                return;
+            }
+
+            let chosenMove = null;
+            if (gameState.difficulty === 'easy') {
+                chosenMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+            } else if (gameState.difficulty === 'medium') {
+                const captureMoves = validMoves.filter(m => m.type === 'capture');
+                chosenMove = captureMoves.length > 0 ? captureMoves[Math.floor(Math.random() * captureMoves.length)] : validMoves[Math.floor(Math.random() * validMoves.length)];
+            } else {
+                chosenMove = getBestMove(gameState.board, P2, 2);
+            }
+
+            document.getElementById('ai-thinking').classList.add('hidden');
+            if (chosenMove) executeMove(chosenMove);
+        }
+
+        async function requestHint() {
+            if (gameState.mode === 'ai' && gameState.turn === P2) return;
+            if (gameState.isPaused) return;
+            if (!document.getElementById('ready-overlay').classList.contains('hidden')) return;
+
+            const btn = document.getElementById('btn-hint');
+            const loader = document.getElementById('hint-loader');
+            btn.disabled = true;
+            loader.classList.remove('hidden');
+            await new Promise(r => setTimeout(r, 50));
+
+            const hintMove = getBestMove(gameState.board, gameState.turn, 2);
+            loader.classList.add('hidden');
+            btn.disabled = false;
+
+            if (hintMove) {
+                highlightHint(hintMove);
+                log("Smart Hint applied!");
+            } else {
+                log("No moves available.");
+            }
+        }
+
+        function highlightHint(move) {
+            const boardEl = document.getElementById('board');
+            const fromIndex = move.from.r * BOARD_SIZE + move.from.c;
+            const fromCell = boardEl.children[fromIndex];
+            if(fromCell) {
+                const fromOverlay = document.createElement('div');
+                fromOverlay.className = "absolute inset-0 highlight-hint rounded-full z-20 pointer-events-none";
+                fromCell.appendChild(fromOverlay);
+                setTimeout(() => fromOverlay.remove(), 2000);
+            }
+            const toIndex = move.to.r * BOARD_SIZE + move.to.c;
+            const toCell = boardEl.children[toIndex];
+            if(toCell) {
+                const toOverlay = document.createElement('div');
+                toOverlay.className = "absolute inset-0 highlight-hint rounded z-20 pointer-events-none";
+                toCell.appendChild(toOverlay);
+                setTimeout(() => toOverlay.remove(), 2000);
+            }
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            boardEl.style.gridTemplateColumns = `repeat(${BOARD_SIZE}, minmax(0, 1fr))`;
+
+            for (let r = 0; r < BOARD_SIZE; r++) {
+                for (let c = 0; c < BOARD_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    const isDark = (r + c) % 2 === 1;
+                    let cellClasses = "cell relative flex items-center justify-center rounded";
+                    cellClasses += isDark ? " bg-slate-700/50" : " bg-slate-800/30";
+
+                    if (gameState.lastMove) {
+                        if (gameState.lastMove.from.r === r && gameState.lastMove.from.c === c) cellClasses += " last-move-from";
+                        if (gameState.lastMove.to.r === r && gameState.lastMove.to.c === c) cellClasses += " last-move-to";
+                    }
+
+                    const move = gameState.validMoves.find(m => m.to.r === r && m.to.c === c);
+                    if (move) {
+                        if (move.type === 'capture') cellClasses += " highlight-capture cursor-pointer";
+                        else cellClasses += " highlight-move cursor-pointer";
+                        cell.onclick = () => handleCellClick(r, c);
+                    } else {
+                        cell.onclick = () => handleCellClick(r, c);
+                    }
+
+                    cell.className = cellClasses;
+
+                    const pVal = gameState.board[r][c];
+                    if (pVal !== 0) {
+                        const piece = document.createElement('div');
+                        const isP1 = pVal === 1;
+                        const isSelected = gameState.selected && gameState.selected.r === r && gameState.selected.c === c;
+                        piece.className = `piece w-[75%] h-[75%] rounded-full shadow-lg border-4 ${isSelected ? 'is-selected' : ''} ${isP1 ? 'bg-blue-600 border-blue-400 shadow-blue-900/50' : 'bg-red-600 border-red-400 shadow-red-900/50'}`;
+                        piece.onclick = (e) => { e.stopPropagation(); handleCellClick(r, c); };
+                        cell.appendChild(piece);
+                    }
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('score-p1').innerText = gameState.scores[1];
+            document.getElementById('score-p2').innerText = gameState.scores[2];
+            document.getElementById('pieces-p1').innerText = gameState.pieces[1];
+            document.getElementById('pieces-p2').innerText = gameState.pieces[2];
+
+            const p1Panel = document.getElementById('hud-p1');
+            const p2Panel = document.getElementById('hud-p2');
+            const turnBadge = document.getElementById('turn-badge');
+
+            if (gameState.turn === P1) {
+                p1Panel.classList.remove('opacity-50');
+                p1Panel.classList.add('scale-105', 'shadow-lg', 'shadow-blue-500/20');
+                p2Panel.classList.add('opacity-50');
+                p2Panel.classList.remove('scale-105', 'shadow-lg');
+                turnBadge.className = "px-3 py-1 md:px-4 md:py-1 bg-blue-600 rounded-full text-[10px] md:text-xs font-bold tracking-widest shadow-lg shadow-blue-500/30 mb-2 transition-colors duration-300";
+                turnBadge.innerText = gameState.extraTurn ? "BLUE COMBO!" : "BLUE TURN";
+            } else {
+                p2Panel.classList.remove('opacity-50');
+                p2Panel.classList.add('scale-105', 'shadow-lg', 'shadow-red-500/20');
+                p1Panel.classList.add('opacity-50');
+                p1Panel.classList.remove('scale-105', 'shadow-lg');
+                turnBadge.className = "px-3 py-1 md:px-4 md:py-1 bg-red-600 rounded-full text-[10px] md:text-xs font-bold tracking-widest shadow-lg shadow-red-500/30 mb-2 transition-colors duration-300";
+                turnBadge.innerText = gameState.extraTurn ? "RED COMBO!" : "RED TURN";
+            }
+        }
+
+        function showFloatingText(r, c, text) {
+            const boardEl = document.getElementById('board');
+            const cellSize = boardEl.offsetWidth / BOARD_SIZE;
+            const el = document.createElement('div');
+            el.innerText = text;
+            el.className = "floating-score font-arcade";
+            if (text.includes('+')) el.classList.add('text-emerald-400');
+            else if (text.includes('-')) el.classList.add('text-red-400');
+            else el.classList.add('text-white');
+            el.style.left = (c * cellSize + cellSize/2 - 20) + 'px';
+            el.style.top = (r * cellSize) + 'px';
+            boardEl.appendChild(el);
+            setTimeout(() => el.remove(), 800);
+        }
+
+        function log(msg) {
+            const logEl = document.getElementById('battle-log');
+            const entry = document.createElement('div');
+            entry.innerHTML = `<span class="text-slate-500">[${new Date().toLocaleTimeString().slice(0,8)}]</span> ${msg}`;
+            logEl.prepend(entry);
+        }
+
+        function endGame() {
+            stopTimer();
+            gameState.isPlaying = false;
+            const actualWinner = gameState.pieces[1] === 0 ? P2 : P1;
+            const winnerName = actualWinner === 1 ? "BLUE" : "RED";
+            
+            document.getElementById('game-over-screen').classList.remove('hidden');
+            
+            // Campaign Logic
+            if (gameState.mode === 'ai') {
+                if (actualWinner === 1) {
+                    // Win
+                    sfx.win();
+                    document.getElementById('go-message').innerText = "LEVEL COMPLETE!";
+                    document.getElementById('go-message').className = "text-3xl font-bold mb-8 text-blue-400";
+                    document.getElementById('btn-next-level').classList.remove('hidden');
+                    document.getElementById('btn-retry').classList.add('hidden');
+                } else {
+                    // Loss
+                    sfx.loss();
+                    document.getElementById('go-message').innerText = "LEVEL FAILED";
+                    document.getElementById('go-message').className = "text-3xl font-bold mb-8 text-red-400";
+                    document.getElementById('btn-next-level').classList.add('hidden');
+                    document.getElementById('btn-retry').classList.remove('hidden');
+                }
+            } else {
+                // PvP Logic
+                sfx.win();
+                document.getElementById('go-message').innerText = `${winnerName} DOMINATION!`;
+                document.getElementById('go-message').className = actualWinner === 1 ? "text-3xl font-bold mb-8 text-blue-400" : "text-3xl font-bold mb-8 text-red-400";
+                document.getElementById('btn-next-level').classList.add('hidden');
+                document.getElementById('btn-retry').classList.add('hidden');
+            }
+
+            document.getElementById('go-score-1').innerText = gameState.scores[1];
+            document.getElementById('go-score-2').innerText = gameState.scores[2];
+        }
+
+        document.addEventListener('dblclick', function(event) {
+            event.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
