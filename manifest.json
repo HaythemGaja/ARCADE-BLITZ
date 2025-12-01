@@ -1,0 +1,33 @@
+{
+  "name": "Arcade Blitz Checkers",
+  "short_name": "ArcadeBlitz",
+  "description": "Fast-paced arcade checkers with power-ups and local AI. Play against CPU or friends.",
+  "start_url": "./arcade_checkers.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "lang": "en",
+  "categories": ["games", "entertainment", "strategy"],
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
